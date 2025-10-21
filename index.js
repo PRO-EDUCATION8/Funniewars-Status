@@ -3,7 +3,11 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require
 const util = require('minecraft-server-util');
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
 });
 
 const CHANNEL_ID = '1417538914524205158';
@@ -12,6 +16,9 @@ const CHECK_INTERVAL = 30000; // 30 seconds
 
 let miniOngoing = false;
 
+// =======================
+// Check Minecraft Server
+// =======================
 async function checkServer() {
     try {
         const result = await util.status(MC_SERVER);
@@ -32,18 +39,37 @@ async function checkServer() {
     }
 }
 
-// Create the slash command
+// =======================
+// Slash Commands
+// =======================
 const commands = [
     new SlashCommandBuilder()
         .setName('status')
-        .setDescription('checking funniewars')
+        .setDescription('Check Minecraft server status')
+        .toJSON(),
+
+    new SlashCommandBuilder()
+        .setName('players')
+        .setDescription('List all online players')
+        .toJSON(),
+
+    new SlashCommandBuilder()
+        .setName('player')
+        .setDescription('Check if a specific player is online')
+        .addStringOption(option =>
+            option.setName('username')
+                  .setDescription('Minecraft username')
+                  .setRequired(true)
+        )
         .toJSON()
 ];
 
-// Register slash commands
+// =======================
+// Register Commands
+// =======================
 client.once('ready', async () => {
     console.log('Bot is ready!');
-    
+
     try {
         const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
         await rest.put(
@@ -55,14 +81,17 @@ client.once('ready', async () => {
         console.error('Error registering slash commands:', error);
     }
 
-    // Start checking the server status
+    // Start auto server check
     setInterval(checkServer, CHECK_INTERVAL);
 });
 
-// Handle slash commands
+// =======================
+// Slash Command Handler
+// =======================
 client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand()) return;
 
+    // ---------- STATUS ----------
     if (interaction.commandName === 'status') {
         await interaction.deferReply();
         try {
@@ -76,36 +105,12 @@ client.on('interactionCreate', async interaction => {
                 embeds: [{
                     title: '🎮 Minecraft Server Status',
                     fields: [
-                        {
-                            name: 'Server',
-                            value: MC_SERVER,
-                            inline: true
-                        },
-                        {
-                            name: 'Players',
-                            value: `${playerCount}/${result.players.max}`,
-                            inline: true
-                        },
-                        {
-                            name: 'Status',
-                            value: '🟢 Online',
-                            inline: true
-                        },
-                        {
-                            name: 'Version',
-                            value: result.version.name,
-                            inline: true
-                        },
-                        {
-                            name: 'MOTD',
-                            value: result.motd.clean || 'No MOTD',
-                            inline: false
-                        },
-                        {
-                            name: 'Players Online',
-                            value: playerList,
-                            inline: false
-                        }
+                        { name: 'Server', value: MC_SERVER, inline: true },
+                        { name: 'Players', value: `${playerCount}/${result.players.max}`, inline: true },
+                        { name: 'Status', value: '🟢 Online', inline: true },
+                        { name: 'Version', value: result.version.name, inline: true },
+                        { name: 'MOTD', value: result.motd.clean || 'No MOTD', inline: false },
+                        { name: 'Players Online', value: playerList, inline: false }
                     ],
                     color: 0x00ff00,
                     timestamp: new Date()
@@ -122,9 +127,60 @@ client.on('interactionCreate', async interaction => {
             });
         }
     }
+
+    // ---------- PLAYERS ----------
+    if (interaction.commandName === 'players') {
+        await interaction.deferReply();
+        try {
+            const result = await util.status(MC_SERVER);
+            const playerList = result.players.sample 
+                ? result.players.sample.map(p => p.name).join(', ')
+                : 'No players online';
+
+            await interaction.editReply({
+                content: `🟢 Players Online: ${playerList}`
+            });
+        } catch (error) {
+            await interaction.editReply('❌ Could not fetch server players.');
+        }
+    }
+
+    // ---------- PLAYER ----------
+    if (interaction.commandName === 'player') {
+        await interaction.deferReply();
+
+        const username = interaction.options.getString('username');
+        try {
+            const result = await util.status(MC_SERVER);
+            const onlinePlayers = result.players.sample
+                ? result.players.sample.map(p => p.name)
+                : [];
+
+            if (onlinePlayers.includes(username)) {
+                await interaction.editReply(`✅ **${username}** is online!`);
+            } else {
+                await interaction.editReply(`❌ **${username}** is not online.`);
+            }
+        } catch (error) {
+            await interaction.editReply('❌ Could not fetch server status.');
+        }
+    }
 });
 
-// Login using token from .env for security
+// =======================
+// Auto-Reply for "WE WANT A MINI"
+// =======================
+client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+
+    if (message.content.toUpperCase() === "WE WANT A MINI") {
+        await message.channel.send("Right on it! Whore");
+    }
+});
+
+// =======================
+// Bot Login
+// =======================
 if (!process.env.DISCORD_TOKEN) {
     console.error('Missing DISCORD_TOKEN in .env');
     process.exit(1);
