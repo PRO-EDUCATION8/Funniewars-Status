@@ -123,4 +123,4 @@ client.on('interactionCreate', async interaction => {
 });
 
 // --- 🔑 Login ---
-client.login(process.env.MTQyOTkzOTk4Njg5OTE0MDYyMA.GC_N4B.AO7_jAsAGgiSb7dnbVXagRovzNnhMAj3e3QP7o);
+client.login(process.env.MTQzMDExOTI2ODA4Njk3MjU0OA.GDFci3.R-9IvC6BBf6wX_wSzyRp0H1E3A6NkhuBeSOPzE);
